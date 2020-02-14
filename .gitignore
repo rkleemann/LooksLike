@@ -15,6 +15,7 @@ nytprof.out
 
 # Dizt::Zilla
 /.build/
+/LooksLike-*
 
 # Module::Build
 _build/
