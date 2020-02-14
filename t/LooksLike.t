@@ -42,17 +42,15 @@ my @words  = (qw( notanumber infinite ));
 push @infs,
     map  { int( rand(2) ) ? uc() : $_ }
         grep { Scalar::Util::looks_like_number($_) }
-            qw(
-                1.#inf 1.#infinity 1.#inf00
-            );
+            '1.#inf', '1.#infinity', '1.#inf00';
 push @nans,
     map  { int( rand(2) ) ? uc() : $_ }
         grep { Scalar::Util::looks_like_number($_) }
-            qw(
-                nanq nans qnan snan
-                1.#nans 1.#qnan 1.#nan(123) 1.#nan(0x45)
-                1.#ind 1.#ind00
-            );
+            qw( nanq nans qnan snan ),
+            '1.#nans',     '1.#qnan',
+            '1.#nan(123)', '1.#nan(0x45)',
+            '1.#ind',      '1.#ind00',
+        ;
 
 # Infinity
 for my $num (@infs) {
@@ -297,12 +295,7 @@ push @numbers,
         [ '1.#nan(0x4)', '', 'nan', '0x4', (undef) x 2, '' ],
         [ '1.#ind',      '', 'ind', undef, (undef) x 2, '' ],
         [ '1.#Ind00',    '', 'Ind', undef, (undef) x 2, '' ],
-    ;                                                
-
-my $SUNumeric = eval {
-    require Scalar::Util::Numeric;
-    #Scalar::Util::Numeric->VERSION(0.50);
-};
+    ;
 
 my @parts = qw( _str sign number fraction exp_sign exp_number excess );
 for my $number (@numbers) {
@@ -316,69 +309,6 @@ for my $number (@numbers) {
     my $lln = Scalar::Util::looks_like_number($num);
     is !!$lln, !length( $parsed{excess} ),
         "looks_like_number($num) == grok_number($num)";
-
-    SKIP: {
-        skip( "Optional Scalar::Util::Numeric is missing", 4 )
-            unless $SUNumeric;
-
-        # There's a bug in Scalar::Util::Numeric that doesn't return 0
-        # for certain non-numeric strings, like "nano" and "infinite".
-        # https://github.com/chocolateboy/Scalar-Util-Numeric/issues/1
-        # In that case, skip over these tests.
-        skip( "Skipping over Scalar::Util::Numeric bug for $num", 4 )
-            if length( $parsed{excess} )
-                && Scalar::Util::Numeric::isnum($num);
-
-        is(
-            LooksLike::integer($num),
-            Scalar::Util::Numeric::isint($num) != 0,
-            "$num passes integer test"
-        );
-        is(
-            0+ LooksLike::infinity($num),
-            Scalar::Util::Numeric::isinf($num),
-            "$num passes infinity test"
-        );
-        is(
-            0+ LooksLike::nan($num),
-            Scalar::Util::Numeric::isnan($num),
-            "$num passes NaN test"
-        );
-
-        ## Cannot test this one because "-nan" and "-0" have negative signs,
-        ## even though they are numerically neither positive nor negative.
-        if ( $num =~ /\A\s*-nan/i || $num =~ /\A\s*-0/ ) {
-            skip( "$num looks negative, but is not", 1 );
-        } else {
-            is(
-                0+ LooksLike::negative($num),
-                Scalar::Util::Numeric::isneg($num),
-                "$num passes negative test"
-            );
-        }
-
-        ## Cannot test this one because integers are considered decimal,
-        ## but would not be considered floats.
-        #is(
-        #    0+ LooksLike::decimal($num),
-        #    Scalar::Util::Numeric::isfloat($num),
-        #    "$num passes decimal test"
-        #);
-
-        ## There is no LooksLike equivalent to
-        ## Scalar::Util::Numeric::isuv() or Scalar::Util::Numeric::isbig()
-        #is(
-        #    0+ LooksLike::XXX($num),
-        #    Scalar::Util::Numeric::isuv($num),
-        #    "$num passes uv test"
-        #);
-        #is(
-        #    0+ LooksLike::XXX($num),
-        #    Scalar::Util::Numeric::isbig($num),
-        #    "$num passes big test"
-        #);
-
-    }
 }
 
 done_testing();

@@ -80,7 +80,7 @@ as evaluating them numerially doesn't make sense:
 C<binary()>, C<octal()>, C<hex()>, C<decimal()>, and C<grok_number()>.
 
 =head2 Numeric or Regexp Functions
-                                               
+
 The following functions operate on the numeric values, if they exist,
 otherwise they fall back to the regular expression equivalent:
 C<number()>, C<integer()>,
@@ -121,6 +121,15 @@ my $hex    = qr/0x$xigits+/i;
 
 ### The following can only be tested with regular expressions ###
 
+=var C<$Binary>
+
+A zero character, followed by a "B" (ignoring case),
+followed by a series of zero and one characters
+
+=cut
+
+our $Binary  = $binary;
+
 =func C<binary($_)>
 
 Returns true if the string starts with C<0b> and finishes with a series of
@@ -128,7 +137,6 @@ C<0> and C<1> digits.
 
 =cut
 
-our $Binary  = $binary;
 sub binary {
     local $_ = shift if @_;
     return undef unless defined;
@@ -138,6 +146,14 @@ sub binary {
 }
 
 
+=var C<$Octal>
+
+A zero character, followed by a series of zero through seven characters.
+
+=cut
+
+our $Octal   = $octal;
+
 =func C<octal($_)>
 
 Returns true if the string starts with C<0> and finishes with a series of
@@ -145,7 +161,6 @@ C<0> through C<7> digits.
 
 =cut
 
-our $Octal   = $octal;
 sub octal {
     local $_ = shift if @_;
     return undef unless defined;
@@ -155,6 +170,16 @@ sub octal {
 }
 
 
+=var C<$Hex>
+
+A zero character, followed by an "X" (ignoring case),
+followed by a series of zero through nine characters
+and/or "A" through "F" characters (ignoring case).
+
+=cut
+
+our $Hex     = $hex;
+
 =func C<hex($_)>
 
 Returns true if the string starts with C<0x> and finishes with a series of
@@ -162,7 +187,6 @@ C<0> through C<9> or C<a> through C<f> digits.
 
 =cut
 
-our $Hex     = $hex;
 sub hex {
     local $_ = shift if @_;
     return undef unless defined;
@@ -172,6 +196,15 @@ sub hex {
 }
 
 
+=var C<$Decimal>
+
+A series of zero through nine characters,
+possibly separated by a single period.
+
+=cut
+
+our $Decimal = qr/[+-]?(?:$int(?:\.$digits*)?|\.$int)/;
+
 =func C<decimal($_)>
 
 Returns true if the string looks like a floating point number without
@@ -179,7 +212,6 @@ the C<E> exponent portion.
 
 =cut
 
-our $Decimal = qr/[+-]?(?:$int(?:\.$digits*)?|\.$int)/;
 sub decimal {
     local $_ = shift if @_;
     return undef unless defined;
@@ -235,6 +267,37 @@ as this substring.  In a complete parse, it is the empty string.
 
 =cut
 
+my $inf = do {
+    my $inf = qr/inf(?:inity)?/i;
+    if ( $^V ge v5.22.0 ) {
+        # Newer versions of Perl accept a broader
+        # range of representations of infinity.
+        # 1.#infinity, 1.#inf*
+        my $dotinf = qr/1\.\#inf(?:inity|0*)/i;
+        qr/$dotinf|$inf/;
+    } else {
+        $inf;
+    }
+};
+
+my $nan = do {
+    if ( $^V ge v5.22.0 ) {
+        # Newer versions of Perl accept a broader
+        # range of representations of NaN.
+        # https://en.wikipedia.org/wiki/NaN#Display
+        # nan[qs]?, [qs]nan,
+        # nan\($int\), nan\($hex\), nan\(\"$octal\"\), nan\($binary\)
+        # 1\.\#nan[qs]?, 1\.\#[qs]nan, 1\.\#ind0*
+        my $nan    = qr/nan[qs]?|[qs]nan/i;
+        my $nandig = qr/$nan\((?:$binary|\"$octal\"|$hex|$int)\)/i;
+        my $ind    = qr/ind0*/i;
+        my $dotnan = qr/1\.\#(?:$nandig|$nan|$ind)/;
+        qr/$dotnan|$nandig|$nan/
+    } else {
+        qr/nan/i;
+    }
+};
+
 sub grok_number {
     local $_ = shift if @_;
     return unless defined;
@@ -269,6 +332,19 @@ sub grok_number {
 
 # The following can be tested with mathematics or regular expressions.
 
+=var C<$Infinity>
+
+The case insensitive words "inf" and "infinity".
+
+Perl version 5.22 and greater recognize a larger set of representations
+that include C<"1.#INF">, C<"1.#Infinity">, C<"1.#inf00">, among others.
+
+=cut
+
+my $infinity = 9e9999;
+
+our $Infinity = qr/[+-]?$inf/;
+
 =func C<infinity($_)>
 
 Returns a true value if the value represents some form of infinity.
@@ -276,21 +352,6 @@ The strings C<infinity> and C<inf> are both valid (case-insensitively).
 
 =cut
 
-my $infinity = 9e9999;
-
-my $inf = do {
-    my $inf = qr/inf(?:inity)?/i;
-    if ( $^V ge v5.22.0 ) {
-        # Newer versions of Perl accept a broader
-        # range of representations of infinity.
-        # 1.#infinity, 1.#inf*
-        my $dotinf = qr/1\.\#inf(?:inity|0*)/i;
-        qr/$dotinf|$inf/;
-    } else {
-        $inf;
-    }
-};
-our $Infinity = qr/[+-]?$inf/;
 sub infinity {
     local $_ = shift if @_;
     return undef unless defined;
@@ -303,6 +364,24 @@ sub infinity {
 }
 
 
+=var C<$NaN>
+
+The case insensitive words "nan".
+
+Perl version 5.22 and greater recognize a larger set of representations
+that include
+C<"nanq">,        C<"nans">,
+C<"qnan">,        C<"snan">,
+C<"1.#nans">,     C<"1.#qnan">,
+C<"1.#nan(123)">, C<"1.#nan(0x45)">,
+among others.
+
+=cut
+
+#my $notanumber = $infinity / $infinity;
+
+our $NaN = qr/[+-]?$nan/;
+
 =func C<nan($_)>
 
 Returns a true value if the value represents some form of not-a-number (C<NaN>).
@@ -310,26 +389,6 @@ The string C<nan> is valid (case-insensitively).
 
 =cut
 
-#my $notanumber = $infinity / $infinity;
-
-my $nan = do {
-    if ( $^V ge v5.22.0 ) {
-        # Newer versions of Perl accept a broader
-        # range of representations of NaN.
-        # https://en.wikipedia.org/wiki/NaN#Display
-        # nan[qs]?, [qs]nan,
-        # nan\($int\), nan\($hex\), nan\(\"$octal\"\), nan\($binary\)
-        # 1\.\#nan[qs]?, 1\.\#[qs]nan, 1\.\#ind0*
-        my $nan    = qr/nan[qs]?|[qs]nan/i;
-        my $nandig = qr/$nan\((?:$binary|\"$octal\"|$hex|$int)\)/i;
-        my $ind    = qr/ind0*/i;
-        my $dotnan = qr/1\.\#(?:$nandig|$nan|$ind)/;
-        qr/$dotnan|$nandig|$nan/
-    } else {
-        qr/nan/i;
-    }
-};
-our $NaN = qr/[+-]?$nan/;
 sub nan {
     local $_ = shift if @_;
     return undef unless defined;
@@ -342,6 +401,14 @@ sub nan {
 }
 
 
+=var C<$Integer>
+
+A series of digits.
+
+=cut
+
+our $Integer = qr/[+-]?$int/;
+
 =func C<integer($_)>
 
 Returns true if the value is a series of ASCII digits C<0> through C<9>.
@@ -349,7 +416,6 @@ Does not guarantee that the number will fit into any number of bits.
 
 =cut
 
-our $Integer = qr/[+-]?$int/;
 sub integer {
     local $_ = shift if @_;
     return undef unless defined;
@@ -363,6 +429,15 @@ sub integer {
 }
 
 
+=var C<$Numeric>
+
+Anything which would be recognized as an integer or floating point number.
+
+=cut
+
+my $exponent = qr/[Ee]$Integer/;
+our $Numeric = qr/$Decimal$exponent?/;
+
 =func C<numeric($_)>
 
 Returns true for any representation of a floating point number,
@@ -371,8 +446,6 @@ It does not include the representations of C<inf> and C<nan>.
 
 =cut
 
-my $exponent = qr/[Ee]$Integer/;
-our $Numeric = qr/$Decimal$exponent?/;
 sub numeric {
     local $_ = shift if @_;
     return undef unless defined;
@@ -426,15 +499,22 @@ sub number {
 }
 
 
-=func C<zero($_)>
+=var C<$Zero>
 
-Returns true for any value that would be interepreted equal (C<==>) to 0.
+Anything which would be regarded as equal to 0.
 
 =cut
 
 # 0, 0.0*, .0+, 0E0, 0.0E0, .0E100, ...
 my $zero  = qr/(?:0+(?:[.]0*)?|[.]0+)$exponent?/;
 our $Zero = qr/[+-]?$zero/;
+
+=func C<zero($_)>
+
+Returns true for any value that would be interepreted equal (C<==>) to 0.
+
+=cut
+
 sub zero {
     local $_ = shift if @_;
     return undef unless defined;
@@ -447,9 +527,9 @@ sub zero {
 }
 
 
-=func C<nonzero($_)>
+=var C<$NonZero>
 
-Returns true for any value that would be interepreted not equal (C<!=>) to 0.
+Anything which looks like a number, but is not 0.
 
 =cut
 
@@ -461,6 +541,13 @@ my $nonzero = do {
     qr/$inf|$nonzeronum$exponent?/;
 };
 our $NonZero = qr/[+-]?$nonzero/;
+
+=func C<nonzero($_)>
+
+Returns true for any value that would be interepreted not equal (C<!=>) to 0.
+
+=cut
+
 sub nonzero {
     local $_ = shift if @_;
     return undef unless defined;
@@ -473,6 +560,14 @@ sub nonzero {
 }
 
 
+=var C<$Positive>
+
+Any number that would compare to greater than 0.
+
+=cut
+
+our $Positive = qr/[+]?$nonzero/;
+
 =func C<positive($_)>
 
 Returns true for any value that would be interpreted as greater than
@@ -481,7 +576,6 @@ Returns true for any value that would be interpreted as greater than
 =cut
 
 # Returns true if number would be greater than 0
-our $Positive = qr/[+]?$nonzero/;
 sub positive {
     local $_ = shift if @_;
     return undef unless defined;
@@ -493,6 +587,14 @@ sub positive {
     return /\A\s*$Positive\s*\z/;
 }
 
+=var C<$Negative>
+
+Any number that would compare to less than 0.
+
+=cut
+
+our $Negative = qr/[-]$nonzero/;
+
 =func C<negative($_)>
 
 Returns true for any value that would be interpreted as less than
@@ -501,7 +603,6 @@ Returns true for any value that would be interpreted as less than
 =cut
 
 # Returns true if number would be less than 0
-our $Negative = qr/[-]$nonzero/;
 sub negative {
     local $_ = shift if @_;
     return undef unless defined;
@@ -514,16 +615,23 @@ sub negative {
 }
 
 
+=var C<$Even>
+
+Any integer which would divide evenly by 2.
+
+=cut
+
+my $evens = '[02468]';
+our $Even = qr/[+-]?$digits*$evens/;
+
 =func C<even($_)>
 
-Returns true for any integer that would have no remainder when modulused 
+Returns true for any integer that would have no remainder when modulused
 with 2.
 
 =cut
 
 # Returns true if integer would be divisible by 2
-my $evens = '[02468]';
-our $Even = qr/[+-]?$digits*$evens/;
 sub even {
     local $_ = shift if @_;
     return undef unless defined;
@@ -537,16 +645,23 @@ sub even {
 }
 
 
+=var C<$Odd>
+
+Any integer which would divde oddly by 2.
+
+=cut
+
+my $odds = '[13579]';
+our $Odd = qr/[+-]?$digits*$odds/;
+
 =func C<odd($_)>
 
-Returns true for any integer that would have a remainder when modulused 
+Returns true for any integer that would have a remainder when modulused
 with 2.
 
 =cut
 
 # Returns true if integer would not be divisible by 2
-my $odds = '[13579]';
-our $Odd = qr/[+-]?$digits*$odds/;
 sub odd {
     local $_ = shift if @_;
     return undef unless defined;
@@ -558,105 +673,6 @@ sub odd {
     }
     return /\A\s*$Odd\s*\z/;
 }
-
-=var C<$Binary>
-
-A zero character, followed by a "B" (ignoring case),
-followed by a series of zero and one characters
-
-=cut
-
-=var C<$Octal>
-
-A zero character, followed by a series of zero through seven characters.
-
-=cut
-
-=var C<$Hex>
-
-A zero character, followed by an "X" (ignoring case),
-followed by a series of zero through nine characters
-and/or "A" through "F" characters (ignoring case).
-
-=cut
-
-=var C<$Decimal>
-
-A series of zero through nine characters,
-possibly separated by a single period.
-
-=cut
-
-=var C<$Infinity>
-
-The case insensitive words "inf" and "infinity".
-
-Perl version 5.22 and greater recognize a larger set of representations
-that include C<"1.#INF">, among others.
-
-=cut
-
-=var C<$NaN>
-
-The case insensitive words "nan".
-
-Perl version 5.22 and greater recognize a larger set of representations
-that include
-C<"nanq">,        C<"nans">,
-C<"qnan">,        C<"snan">,
-C<"1.#nans">,     C<"1.#qnan">,
-C<"1.#nan(123)">, C<"1.#nan(0x45)">,
-among others.
-
-=cut
-
-=var C<$Integer>
-
-A series of digits.
-
-=cut
-
-=var C<$Numeric>
-
-Anything which would be recognized as an integer or floating point number.
-
-=cut
-
-=var C<$Zero>
-
-Anything which would be regarded as equal to 0.
-
-=cut
-
-=var C<$NonZero>
-
-Anything which looks like a number, but is not 0.
-
-=cut
-
-=var C<$Positive>
-
-Any number that would compare to greater than 0.
-
-=cut
-
-=var C<$Negative>
-
-Any number that would compare to less than 0.
-
-=cut
-
-=var C<$Even>
-
-Any integer which would divide evenly by 2.
-
-=cut
-
-=var C<$Odd>
-
-Any integer which would divde oddly by 2.
-
-=cut
 
 1;
 
