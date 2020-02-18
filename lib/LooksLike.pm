@@ -267,22 +267,30 @@ as this substring.  In a complete parse, it is the empty string.
 
 =cut
 
+my $infinity = 9e9999;
 my $inf = do {
     my $inf = qr/inf(?:inity)?/i;
-    if ( $^V ge v5.22.0 ) {
-        # Newer versions of Perl accept a broader
+    if ( $^O eq 'MSWin32' || $^V ge v5.22.0 ) {
+        # Some versions of Perl accept a broader
         # range of representations of infinity.
         # 1.#infinity, 1.#inf*
         my $dotinf = qr/1\.\#inf(?:inity|0*)/i;
         qr/$dotinf|$inf/;
+    } elsif ( $infinity !~ $inf ) {
+        $inf = join( '|',
+            sort { length($b) <=> length($a) } $inf, quotemeta($infinity)
+        );
+        qr/$inf/;
     } else {
         $inf;
     }
 };
 
+my $notanumber = $infinity / $infinity;
 my $nan = do {
-    if ( $^V ge v5.22.0 ) {
-        # Newer versions of Perl accept a broader
+    my $nan = qr/nan/i;
+    if ( $^O eq 'MSWin32' || $^V ge v5.22.0 ) {
+        # Some versions of Perl accept a broader
         # range of representations of NaN.
         # https://en.wikipedia.org/wiki/NaN#Display
         # nan[qs]?, [qs]nan,
@@ -293,8 +301,13 @@ my $nan = do {
         my $ind    = qr/ind0*/i;
         my $dotnan = qr/1\.\#(?:$nandig|$nan|$ind)/;
         qr/$dotnan|$nandig|$nan/
+    } elsif ( $notanumber !~ $nan ) {
+        $nan = join( '|',
+            sort { length($b) <=> length($a) } $nan, quotemeta($notanumber)
+        );
+        qr/$nan/;
     } else {
-        qr/nan/i;
+        $nan;
     }
 };
 
@@ -341,8 +354,6 @@ that include C<"1.#INF">, C<"1.#Infinity">, C<"1.#inf00">, among others.
 
 =cut
 
-my $infinity = 9e9999;
-
 our $Infinity = qr/[+-]?$inf/;
 
 =func C<infinity($_)>
@@ -377,8 +388,6 @@ C<"1.#nan(123)">, C<"1.#nan(0x45)">,
 among others.
 
 =cut
-
-#my $notanumber = $infinity / $infinity;
 
 our $NaN = qr/[+-]?$nan/;
 
