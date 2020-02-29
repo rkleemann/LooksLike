@@ -267,7 +267,7 @@ as this substring.  In a complete parse, it is the empty string.
 
 =cut
 
-my $infinity = 9e9999;
+my $infinity = 8888e8888;
 my $inf = do {
     my $inf = qr/inf(?:inity)?/i;
     if ( $^O eq 'MSWin32' || $^V ge v5.22.0 ) {
@@ -681,6 +681,64 @@ sub odd {
         return 0 != ( $_ % 2 );
     }
     return /\A\s*$Odd\s*\z/;
+}
+
+=var C<%representation>
+
+The hash used by L<representation( $_ ; %representation )> to
+format various numeric representations.  Has three fields:
+
+=over
+
+=item C<infinity>
+
+How positive infinity should be represented.  Defaults to C<inf>.
+
+=item C<-infinity>
+
+How negative infinity should be represented.  Defaults to C<-inf>.
+
+=item C<nan>
+
+How not-a-number should be represented.  Defaults to C<nan>.
+
+=back
+
+=cut
+
+our %representation = (
+     "infinity" =>  "inf",
+    "-infinity" => "-inf",
+     "nan"      =>  "nan",
+);
+
+=func C<representation( $_ ; %representation )>
+
+Condense the large set of representations for infinity and not-a-number
+to a simple set.  Pass in a value (or use C<$_> if nothing is passed in),
+and if it's something that matches positive infinity, negative infinity,
+or not-a-number, then format it as the L<C<%representation>> hash indicates.
+
+The keys and values to override the C<%representation> hash can be passed in,
+and the values will be used in place of the defaults.
+
+Since v0.20.056.
+
+=cut
+
+sub representation {
+    local $_ = shift if @_ % 2;
+    return undef unless defined;
+    return undef if ref;
+
+    my %repr = ( %representation, @_ );
+
+    return nan($_)                    ? $repr{"nan"}
+        : infinity($_) ? positive($_) ? $repr{"infinity"}
+                       :                $repr{"-infinity"}
+        : exists( $repr{$_} )         ? $repr{$_}
+        :                               $_
+        ;
 }
 
 1;
